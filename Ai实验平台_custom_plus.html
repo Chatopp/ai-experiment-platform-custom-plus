@@ -8,8 +8,19 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <style>
     :root {
-      --primary-color:#0d6efd; --success-color:#28a745; --warning-color:#ffc107; --error-color:#dc3545;
-      --light:#f8f9fa; --muted:#6c757d; --border:#dee2e6; --bg:#f0f2f5; --ai:#4a90e2;
+      --primary-color:#0d6efd;
+      --success-color:#28a745;
+      --warning-color:#ffc107;
+      --error-color:#dc3545;
+      --light:#f8f9fa;
+      --muted:#6c757d;
+      --border:#dee2e6;
+      --bg:#f0f2f5;
+      --ai:#4a90e2;
+      /* Added responsive sizing variables for test tubes and bubble animation. These will be updated via JS */
+      --tubeW: 50px;
+      --tubeH: 180px;
+      --riseY: 170px;
     }
     *{ box-sizing:border-box; }
     body{ margin:0; background:var(--bg); color:#212529; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial; }
@@ -20,8 +31,17 @@
     .ctrls{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
     .ctrls button,.ctrls select,.ctrls label, .ctrls input{ border:1px solid var(--border); background:#fff; padding:.45rem .6rem; border-radius:8px; font-weight:700; cursor:pointer; }
     .pill{ padding:.3rem .6rem; border-radius:999px; background:var(--light); border:1px solid var(--border); font-weight:800; }
-    #app{ display:grid; grid-template-columns:1fr 2fr 1.2fr; gap:1rem; max-width:1900px; margin:1rem auto; padding:0 1rem 1rem; }
-    @media (max-width:1200px){ #app{ grid-template-columns:1fr; } }
+    /* Responsive layout: switch from 3 columns to 2 columns and 1 column at smaller breakpoints */
+    #app{
+      display:grid;
+      grid-template-columns:1fr 2fr 1.2fr;
+      gap:1rem;
+      max-width:1900px;
+      margin:1rem auto;
+      padding:0 1rem 1rem;
+    }
+    @media (max-width:1280px){ #app{ grid-template-columns:1fr 1fr; } }
+    @media (max-width:900px){ #app{ grid-template-columns:1fr; } }
     .card{ background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); padding:1rem; display:flex; flex-direction:column; min-height:0; }
     .card h2{ margin:0 0 .65rem 0; border-bottom:1px solid var(--border); padding-bottom:.45rem; font-size:1.15rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
     .tabbar{ display:flex; gap:.25rem; border-bottom:1px solid var(--border); margin-bottom:.5rem; flex-wrap:wrap; }
@@ -48,15 +68,48 @@
     #feedback{ background:#eef6ff; border:1px solid var(--border); padding:.6rem; border-radius:8px; min-height:44px; }
     /* Lab styles (same as Plus版，略微精简） */
     #lab-bench-top{ display:flex; gap:1.25rem; justify-content:center; align-items:flex-end; height:260px; padding:1rem; background:linear-gradient(#e9ecef,#d8dce0); border-radius:8px; }
-    .test-tube{ width:50px; height:180px; border:3px solid #6c757d; border-top:none; border-radius:0 0 25px 25px; position:relative; background:#fff; box-shadow:inset 2px 0 10px rgba(0,0,0,.1); transition:transform .2s; cursor:pointer; overflow:hidden; }
+    .test-tube{
+      width:var(--tubeW);
+      height:var(--tubeH);
+      border:3px solid #6c757d;
+      border-top:none;
+      border-radius:0 0 25px 25px;
+      position:relative;
+      background:#fff;
+      box-shadow:inset 2px 0 10px rgba(0,0,0,.1);
+      transition:transform .2s;
+      cursor:pointer;
+      overflow:hidden;
+    }
     .liquid{ position:absolute; bottom:0; left:0; width:100%; height:0; background:#cde6f9; border-radius:0 0 22px 22px; transition:height .35s ease-out, background-color .35s; }
     .bubbles{ position:absolute; bottom:0; left:0; width:100%; height:100%; pointer-events:none; }
     .bubble{ position:absolute; background:rgba(255,255,255,.6); border-radius:50%; bottom:10px; animation:rise 4s infinite ease-in; }
-    @keyframes rise{ 0%{ transform:translateY(0); opacity:1; } 100%{ transform:translateY(-170px); opacity:0; } }
+    /* Bubble rise animation uses CSS variable so it adapts to container height */
+    @keyframes rise{
+      0%{
+        transform:translateY(0);
+        opacity:1;
+      }
+      100%{
+        transform:translateY(calc(-1 * var(--riseY)));
+        opacity:0;
+      }
+    }
     .tube-label{ position:absolute; top:10px; left:50%; transform:translateX(-50%); background:white; padding:2px 8px; border:1px solid #aaa; border-radius:4px; font-weight:800; z-index:2; }
     .indicator{ position:absolute; bottom:5px; left:50%; transform:translateX(-50%); font-size:1.4rem; opacity:.85; }
     .rack h3{ margin:.2rem 0 .6rem 0; }
-    .iconbox{ width:60px; height:90px; border:2px solid #888; border-radius:8px 8px 4px 4px; display:flex; align-items:center; justify-content:center; background:#f1f1f1; margin-bottom:.35rem; }
+    /* Icon box scales with viewport size for better touch targets on small screens */
+    .iconbox{
+      width:clamp(48px,6vw,80px);
+      height:clamp(72px,10vw,120px);
+      border:2px solid #888;
+      border-radius:8px 8px 4px 4px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#f1f1f1;
+      margin-bottom:.35rem;
+    }
     .bottle, .tool{ display:flex; flex-direction:column; align-items:center; cursor:pointer; transition:transform .2s; text-align:center; }
     .bottle:hover, .tool:hover{ transform:scale(1.05); }
     .msg{ padding:.5rem; border-radius:6px; margin-bottom:.45rem; }
@@ -70,6 +123,12 @@
     .panel h3{ margin:.2rem 0 .6rem 0; font-size:1.2rem; }
     table.simple{ width:100%; border-collapse:collapse; }
     table.simple th, table.simple td{ border:1px solid var(--border); padding:.5rem; text-align:center; }
+
+    /* Chart container adapts to viewport width */
+    #rev-chart{
+      max-width:min(800px,96vw);
+      width:100%;
+    }
   </style>
 </head>
 <body>
@@ -960,6 +1019,28 @@
       }
     }
   });
+
+  // Responsive bench sizing: update CSS variables based on container width
+  const bench = document.getElementById('lab-bench-top');
+  function updateBenchVars(){
+    if(!bench) return;
+    const width = bench.clientWidth;
+    // Tube width is proportional to bench width with a sensible minimum
+    const tubeW = Math.max(40, width / 15);
+    const tubeH = tubeW * 3.5;
+    const riseY = tubeH * 0.95;
+    bench.style.setProperty('--tubeW', `${tubeW}px`);
+    bench.style.setProperty('--tubeH', `${tubeH}px`);
+    bench.style.setProperty('--riseY', `${riseY}px`);
+  }
+  // Observe bench resize and initialize variables
+  if (typeof ResizeObserver !== 'undefined'){
+    new ResizeObserver(updateBenchVars).observe(bench);
+  } else {
+    // Fallback for environments without ResizeObserver
+    window.addEventListener('resize', updateBenchVars);
+  }
+  updateBenchVars();
 
   // 初始
   updateModePill();
