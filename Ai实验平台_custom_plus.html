@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI辅助生物实验 · 自定义实验生成器</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary-color:#0d6efd; --success-color:#28a745; --warning-color:#ffc107; --error-color:#dc3545;
+      --light:#f8f9fa; --muted:#6c757d; --border:#dee2e6; --bg:#f0f2f5; --ai:#4a90e2;
+    }
+    *{ box-sizing:border-box; }
+    body{ margin:0; background:var(--bg); color:#212529; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial; }
+    header{ position:sticky; top:0; z-index:9; background:#fff; border-bottom:1px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,.05); }
+    .bar{ max-width:1900px; margin:0 auto; padding:.75rem 1rem; display:flex; gap:.5rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    .brand{ font-weight:900; letter-spacing:.3px; }
+    .brand small{ color:var(--muted); font-weight:700; margin-left:.4rem; }
+    .ctrls{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+    .ctrls button,.ctrls select,.ctrls label, .ctrls input{ border:1px solid var(--border); background:#fff; padding:.45rem .6rem; border-radius:8px; font-weight:700; cursor:pointer; }
+    .pill{ padding:.3rem .6rem; border-radius:999px; background:var(--light); border:1px solid var(--border); font-weight:800; }
+    #app{ display:grid; grid-template-columns:1fr 2fr 1.2fr; gap:1rem; max-width:1900px; margin:1rem auto; padding:0 1rem 1rem; }
+    @media (max-width:1200px){ #app{ grid-template-columns:1fr; } }
+    .card{ background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); padding:1rem; display:flex; flex-direction:column; min-height:0; }
+    .card h2{ margin:0 0 .65rem 0; border-bottom:1px solid var(--border); padding-bottom:.45rem; font-size:1.15rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+    .tabbar{ display:flex; gap:.25rem; border-bottom:1px solid var(--border); margin-bottom:.5rem; flex-wrap:wrap; }
+    .tab{ padding:.5rem .75rem; border:none; background:none; font-weight:800; color:#6c757d; border-bottom:3px solid transparent; cursor:pointer; border-radius:6px 6px 0 0; }
+    .tab.active{ color:var(--primary-color); border-bottom-color:var(--primary-color); background:#f7fbff; }
+    .pane{ display:none; flex-direction:column; gap:.5rem; }
+    .pane.active{ display:flex; }
+    .section{ border-bottom:1px solid var(--border); padding-bottom:.5rem; }
+    .section:last-child{ border-bottom:none; }
+    .grid{ display:grid; gap:.6rem; }
+    .grid-2{ grid-template-columns:1fr 1fr; }
+    .grid-3{ grid-template-columns:repeat(3,1fr); }
+    .grid-4{ grid-template-columns:repeat(4,1fr); }
+    .muted{ color:var(--muted); font-size:.9rem; }
+    .btn{ background:var(--primary-color); color:#fff; border:none; padding:.6rem .9rem; border-radius:8px; font-weight:900; cursor:pointer; }
+    .btn.secondary{ background:#6c757d; }
+    .btn.danger{ background:var(--error-color); }
+    .btn.warn{ background:var(--warning-color); color:#333; }
+    .row{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+    input[type="text"], input[type="number"], textarea, select{ width:100%; border:1px solid var(--border); border-radius:8px; padding:.5rem .6rem; font-weight:600; }
+    textarea{ min-height:90px; }
+    .hint{ font-size:.85rem; color:#6c757d; }
+    .tag{ display:inline-block; padding:.2rem .5rem; border:1px solid var(--border); border-radius:999px; margin-right:.3rem; background:#fafafa; }
+    #feedback{ background:#eef6ff; border:1px solid var(--border); padding:.6rem; border-radius:8px; min-height:44px; }
+    /* Lab styles (same as Plus版，略微精简） */
+    #lab-bench-top{ display:flex; gap:1.25rem; justify-content:center; align-items:flex-end; height:260px; padding:1rem; background:linear-gradient(#e9ecef,#d8dce0); border-radius:8px; }
+    .test-tube{ width:50px; height:180px; border:3px solid #6c757d; border-top:none; border-radius:0 0 25px 25px; position:relative; background:#fff; box-shadow:inset 2px 0 10px rgba(0,0,0,.1); transition:transform .2s; cursor:pointer; overflow:hidden; }
+    .liquid{ position:absolute; bottom:0; left:0; width:100%; height:0; background:#cde6f9; border-radius:0 0 22px 22px; transition:height .35s ease-out, background-color .35s; }
+    .bubbles{ position:absolute; bottom:0; left:0; width:100%; height:100%; pointer-events:none; }
+    .bubble{ position:absolute; background:rgba(255,255,255,.6); border-radius:50%; bottom:10px; animation:rise 4s infinite ease-in; }
+    @keyframes rise{ 0%{ transform:translateY(0); opacity:1; } 100%{ transform:translateY(-170px); opacity:0; } }
+    .tube-label{ position:absolute; top:10px; left:50%; transform:translateX(-50%); background:white; padding:2px 8px; border:1px solid #aaa; border-radius:4px; font-weight:800; z-index:2; }
+    .indicator{ position:absolute; bottom:5px; left:50%; transform:translateX(-50%); font-size:1.4rem; opacity:.85; }
+    .rack h3{ margin:.2rem 0 .6rem 0; }
+    .iconbox{ width:60px; height:90px; border:2px solid #888; border-radius:8px 8px 4px 4px; display:flex; align-items:center; justify-content:center; background:#f1f1f1; margin-bottom:.35rem; }
+    .bottle, .tool{ display:flex; flex-direction:column; align-items:center; cursor:pointer; transition:transform .2s; text-align:center; }
+    .bottle:hover, .tool:hover{ transform:scale(1.05); }
+    .msg{ padding:.5rem; border-radius:6px; margin-bottom:.45rem; }
+    .msg.info{ background:#cfe2ff; color:#052c65; }
+    .msg.success{ background:#d1e7dd; color:#0a3622; }
+    .msg.warn{ background:#fff3cd; color:#664d03; }
+    .msg.error{ background:#f8d7da; color:#58151a; }
+    .overlay{ position:fixed; inset:0; background:rgba(255,255,255,.98); z-index:10; display:none; align-items:flex-start; justify-content:center; overflow:auto; padding:1rem; }
+    .overlay.show{ display:flex; }
+    .panel{ width:min(980px,95%); background:#fff; border:1px solid var(--border); border-radius:12px; padding:1rem; box-shadow:0 12px 40px rgba(0,0,0,.15); }
+    .panel h3{ margin:.2rem 0 .6rem 0; font-size:1.2rem; }
+    table.simple{ width:100%; border-collapse:collapse; }
+    table.simple th, table.simple td{ border:1px solid var(--border); padding:.5rem; text-align:center; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="row">
+        <div class="brand">AI辅助生物实验 <small>自定义生成器·Plus</small></div>
+        <span class="pill" id="mode-pill">教学模式</span>
+        <span class="hint">快捷键：H提示 / S开始 / R选择实验 / U撤销 / E导出 / D滴管</span>
+      </div>
+      <div class="ctrls">
+        <label>模式</label>
+        <select id="mode-select">
+          <option value="teach">教学（不扣分）</option>
+          <option value="exam">考核（提示扣分）</option>
+        </select>
+        <button id="btn-custom">自定义实验</button>
+        <button id="btn-save">保存进度</button>
+        <button id="btn-restore">恢复进度</button>
+        <button id="btn-clearstore">清除进度</button>
+        <button id="btn-export">导出CSV</button>
+        <button id="btn-export-custom">导出自定义配置</button>
+        <button id="btn-import-custom">导入配置</button>
+        <input type="file" id="file-import" accept="application/json" style="display:none;" />
+      </div>
+    </div>
+  </header>
+
+  <div id="app">
+    <!-- 左：手册/日志 -->
+    <div class="card">
+      <div class="tabbar">
+        <button class="tab active" data-pane="manual">实验手册</button>
+        <button class="tab" data-pane="log">我的实验记录</button>
+      </div>
+      <div class="pane active" id="manual">
+        <h2><span><i class="fas fa-book-open"></i> <span id="exp-title"></span></span><span id="exp-progress" class="pill">0%</span></h2>
+        <div id="manual-inject"></div>
+        <div class="section">
+          <h3><i class="fas fa-list-ol"></i> 实验步骤（总分100）</h3>
+          <div id="steps"></div>
+        </div>
+      </div>
+      <div class="pane" id="log">
+        <h2><span><i class="fas fa-clipboard-list"></i> 我的实验记录</span></h2>
+        <div class="row"><button class="btn secondary" id="btn-undo">撤销一步</button></div>
+        <div id="log-entries"></div>
+      </div>
+    </div>
+
+    <!-- 中：实验台 -->
+    <div class="card">
+      <h2><i class="fas fa-vial"></i> 实验操作台</h2>
+      <div id="lab-bench-top">
+        <div id="tube-A" class="test-tube" data-id="A" tabindex="0"><div class="liquid"></div><div class="bubbles"></div><div class="indicator"></div><div class="tube-label">A</div></div>
+        <div id="tube-B" class="test-tube" data-id="B" tabindex="0"><div class="liquid"></div><div class="bubbles"></div><div class="indicator"></div><div class="tube-label">B</div></div>
+        <div id="tube-C" class="test-tube" data-id="C" tabindex="0"><div class="liquid"></div><div class="bubbles"></div><div class="indicator"></div><div class="tube-label">C</div></div>
+      </div>
+      <div class="row" style="justify-content:space-around; margin-top:.75rem; flex-wrap:wrap;">
+        <div class="rack">
+          <h3><i class="fas fa-prescription-bottle"></i> 试剂架</h3>
+          <div id="reagents" class="row"></div>
+        </div>
+        <div class="rack">
+          <h3><i class="fas fa-tools"></i> 工具区</h3>
+          <div id="tools" class="row"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：AI助手 -->
+    <div class="card">
+      <h2><i class="fas fa-robot"></i> AI 助手</h2>
+      <div id="feedback"></div>
+      <div class="grid grid-3">
+        <div><div class="muted">当前得分</div><div style="font-size:1.6rem;font-weight:900;color:var(--primary-color)" id="score">0</div></div>
+        <div><div class="muted">用时</div><div style="font-size:1.6rem;font-weight:900;" id="time">00:00</div></div>
+        <div><div class="muted">失误次数</div><div style="font-size:1.6rem;font-weight:900;color:var(--error-color)" id="errs">0</div></div>
+      </div>
+      <div class="grid grid-3" style="margin-top:.5rem;">
+        <button class="btn" id="btn-hint">AI提示下一步</button>
+        <button class="btn warn" id="btn-select">选择/重置实验</button>
+        <button class="btn" id="btn-quick">快速开始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 选择实验 -->
+  <div id="overlay-select" class="overlay">
+    <div class="panel">
+      <h3>选择你的探究课题</h3>
+      <p class="muted">内置模板 + 你的自定义实验</p>
+      <div id="select-buttons" class="row" style="gap:.8rem; flex-wrap:wrap;"></div>
+      <div class="row" style="margin-top:.6rem;">
+        <button class="btn secondary" id="close-select">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 复盘报告 -->
+  <div id="overlay-review" class="overlay">
+    <div class="panel" style="max-width:820px;">
+      <h3><i class="fas fa-award"></i> AI 实验报告</h3>
+      <div style="font-size:2.2rem;font-weight:900;color:var(--primary-color)" id="rev-score">100</div>
+      <div class="muted" id="rev-subscore"></div>
+      <div id="rev-body"></div>
+      <canvas id="rev-chart" height="180" style="margin-top:.6rem;"></canvas>
+      <div class="row" style="margin-top:.6rem;"><button class="btn" id="close-review">完成复盘</button></div>
+    </div>
+  </div>
+
+  <!-- 自定义生成器 -->
+  <div id="overlay-custom" class="overlay">
+    <div class="panel">
+      <h3><i class="fas fa-wand-magic-sparkles"></i> 自定义实验生成器</h3>
+      <div class="grid grid-2 section">
+        <div>
+          <label>实验标题</label>
+          <input id="c-title" type="text" placeholder="例如：探究X对Y的影响" />
+        </div>
+        <div>
+          <label>模板</label>
+          <select id="c-template">
+            <option value="blank">空白</option>
+            <option value="ph">pH 模板</option>
+            <option value="temperature">温度模板</option>
+            <option value="concentration">底物浓度模板</option>
+          </select>
+        </div>
+        <div class="grid-2" style="grid-column:1/-1;">
+          <div>
+            <label>实验目的/原理（可选）</label>
+            <textarea id="c-manual" placeholder="用一段话说明目的与原理，支持简单HTML"></textarea>
+          </div>
+          <div>
+            <label>步骤分值（自动归一成100）</label>
+            <div class="grid grid-2">
+              <div><span class="muted">① 加入酶</span><input id="sc-1" type="number" value="20"/></div>
+              <div><span class="muted">② 设置条件</span><input id="sc-2" type="number" value="20"/></div>
+              <div><span class="muted">③ 加入底物</span><input id="sc-3" type="number" value="20"/></div>
+              <div><span class="muted">④ 开始反应</span><input id="sc-4" type="number" value="10"/></div>
+              <div><span class="muted">⑤ 科学结论</span><input id="sc-5" type="number" value="30"/></div>
+            </div>
+            <p class="hint">会按比例缩放到总分100。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>试剂列表</h3>
+        <div id="c-reagents"></div>
+        <div class="row" style="margin-top:.5rem;">
+          <button class="btn" id="add-reagent"><i class="fas fa-plus"></i> 添加试剂</button>
+        </div>
+        <div class="grid grid-3" style="margin-top:.6rem;">
+          <div>
+            <label>核心酶试剂</label>
+            <select id="c-enzyme"></select>
+          </div>
+          <div>
+            <label>底物试剂</label>
+            <select id="c-substrate"></select>
+          </div>
+          <div>
+            <label>启用温度处理</label>
+            <select id="c-enable-temp">
+              <option value="no">否</option>
+              <option value="yes">是（提供0℃/37℃/100℃）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>三支试管设置（A/B/C）</h3>
+        <table class="simple">
+          <thead><tr><th>试管</th><th>条件名称</th><th>条件试剂（可选）</th><th>温度处理</th><th>期望现象强度</th></tr></thead>
+          <tbody>
+            <tr><td>A</td><td><input class="c-cond-name" data-t="A" placeholder="如：中性"/></td>
+              <td><select class="c-cond-reagent" data-t="A"></select></td>
+              <td><select class="c-cond-bath" data-t="A"><option value="">无</option><option value="bath_0">0℃</option><option value="bath_37">37℃</option><option value="bath_100">100℃</option></select></td>
+              <td><select class="c-cond-intensity" data-t="A"><option>none</option><option>low</option><option>medium</option><option selected>high</option></select></td></tr>
+            <tr><td>B</td><td><input class="c-cond-name" data-t="B" placeholder="如：酸性"/></td>
+              <td><select class="c-cond-reagent" data-t="B"></select></td>
+              <td><select class="c-cond-bath" data-t="B"><option value="">无</option><option value="bath_0">0℃</option><option value="bath_37">37℃</option><option value="bath_100">100℃</option></select></td>
+              <td><select class="c-cond-intensity" data-t="B"><option>none</option><option selected>low</option><option>medium</option><option>high</option></select></td></tr>
+            <tr><td>C</td><td><input class="c-cond-name" data-t="C" placeholder="如：碱性"/></td>
+              <td><select class="c-cond-reagent" data-t="C"></select></td>
+              <td><select class="c-cond-bath" data-t="C"><option value="">无</option><option value="bath_0">0℃</option><option value="bath_37">37℃</option><option value="bath_100">100℃</option></select></td>
+              <td><select class="c-cond-intensity" data-t="C"><option>none</option><option>low</option><option selected>medium</option><option>high</option></select></td></tr>
+          </tbody>
+        </table>
+        <p class="hint">若勾选“启用温度处理=是”，上表的温度选择才会生效；否则忽略。</p>
+      </div>
+
+      <div class="row" style="justify-content:flex-end; gap:.5rem;">
+        <button class="btn secondary" id="btn-apply-template">一键套用模板</button>
+        <button class="btn" id="btn-save-custom">保存为我的实验</button>
+        <button class="btn" id="btn-build-start">生成并开始实验</button>
+        <button class="btn secondary" id="btn-close-custom">关闭</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // ====== 数据区 ======
+  const STORAGE_KEY = 'aiLabStateV3';
+  const CUSTOM_KEY = 'aiLabCustomExperimentsV1';
+
+  const Templates = {
+    ph: {
+      title:'探究pH对酶活性的影响',
+      reagents:[
+        {id:'catalase',name:'肝脏研磨液',icon:'<i class="fas fa-dna"></i>'},
+        {id:'water',name:'清水',icon:'<i class="fas fa-tint"></i>'},
+        {id:'hcl',name:'盐酸',icon:'HCl'},
+        {id:'naoh',name:'氢氧化钠',icon:'NaOH'},
+        {id:'h2o2',name:'H₂O₂',icon:'H₂O₂'}
+      ],
+      enzyme:'catalase', substrate:'h2o2', enableTemp:false,
+      tube:{ A:{name:'中性',reagent:'water',bath:'',intensity:'high'},
+             B:{name:'酸性',reagent:'hcl',bath:'',intensity:'low'},
+             C:{name:'碱性',reagent:'naoh',bath:'',intensity:'low'} },
+      manual:`<details open><summary><b>实验目的</b></summary><ul><li>探究pH对过氧化氢酶活性的影响。</li><li>学会设置对照实验与控制变量。</li></ul></details>
+              <details><summary><b>实验原理</b></summary><p>过氧化氢酶最适pH约7。偏酸或偏碱会降低活性。</p></details>`
+    },
+    temperature: {
+      title:'探究温度对酶活性的影响',
+      reagents:[
+        {id:'catalase',name:'肝脏研磨液',icon:'<i class="fas fa-dna"></i>'},
+        {id:'h2o2',name:'H₂O₂',icon:'H₂O₂'}
+      ],
+      enzyme:'catalase', substrate:'h2o2', enableTemp:true,
+      tube:{ A:{name:'0℃ 冰浴',reagent:'',bath:'bath_0',intensity:'low'},
+             B:{name:'37℃ 恒温',reagent:'',bath:'bath_37',intensity:'high'},
+             C:{name:'100℃ 沸水',reagent:'',bath:'bath_100',intensity:'none'} },
+      manual:`<details open><summary><b>实验目的</b></summary><ul><li>探究温度对过氧化氢酶活性的影响。</li></ul></details>
+              <details><summary><b>实验原理</b></summary><p>最适温度约37℃；0℃活性被抑制；100℃酶变性失活。</p></details>`
+    },
+    concentration:{
+      title:'探究底物浓度对酶活性的影响',
+      reagents:[
+        {id:'catalase',name:'肝脏研磨液',icon:'<i class="fas fa-dna"></i>'},
+        {id:'h2o2_1',name:'1% H₂O₂',icon:'1%'},
+        {id:'h2o2_3',name:'3% H₂O₂',icon:'3%'},
+        {id:'h2o2_5',name:'5% H₂O₂',icon:'5%'}
+      ],
+      enzyme:'catalase', substrate:null, enableTemp:false,
+      tube:{ A:{name:'1% H₂O₂',reagent:'h2o2_1',bath:'',intensity:'low'},
+             B:{name:'3% H₂O₂',reagent:'h2o2_3',bath:'',intensity:'medium'},
+             C:{name:'5% H₂O₂',reagent:'h2o2_5',bath:'',intensity:'high'} },
+      manual:`<details open><summary><b>实验目的</b></summary><ul><li>探究底物浓度与反应速率的关系。</li></ul></details>
+              <details><summary><b>实验原理</b></summary><p>酶量一定时，速率随底物浓度先升高后趋于平台。</p></details>`
+    }
+  };
+
+  const BaseExperiments = {}; // 运行时注入：由模板转标准定义
+
+  const State = {
+    mode:'teach',
+    hintCount:0,
+    chart:null,
+    lab:null,
+    procedure:[],
+    current:null,
+    history:[]
+  };
+
+  // ====== 工具 ======
+  const $ = (sel,root=document)=>root.querySelector(sel);
+  const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+  function msg(text,type='info'){ const d=document.createElement('div'); d.className=`msg ${type}`; d.innerHTML=text; $('#feedback').prepend(d); }
+  function minutes(t){ const m=String(Math.floor(t/60)).padStart(2,'0'); const s=String(t%60).padStart(2,'0'); return `${m}:${s}`; }
+  function snapshot(){
+    const tubes={}; ['A','B','C'].forEach(k=>tubes[k]={
+      reagents:Array.from(State.lab.tubes[k].reagents), condition:State.lab.tubes[k].condition
+    });
+    return JSON.parse(JSON.stringify({
+      expId: State.lab.expId, activeTool: State.lab.activeTool, dropper: State.lab.dropper,
+      tubes, score:State.lab.score, errs:State.lab.errs, log:State.lab.log.slice(0,200),
+      started:State.lab.started, finished:State.lab.finished, elapsed:State.lab.elapsed
+    }));
+  }
+  function pushHistory(){ State.history.push(snapshot()); if (State.history.length>30) State.history.shift(); }
+  function restoreSnap(s){
+    initLab(BaseExperiments[s.expId]);
+    ['A','B','C'].forEach(k=>{ State.lab.tubes[k].reagents=new Set(s.tubes[k].reagents); State.lab.tubes[k].condition=s.tubes[k].condition; });
+    State.lab.activeTool=s.activeTool; State.lab.dropper=s.dropper;
+    State.lab.score=s.score; State.lab.errs=s.errs; State.lab.log=s.log||[]; State.lab.started=s.started; State.lab.finished=s.finished; State.lab.elapsed=s.elapsed||0;
+    renderAll();
+  }
+
+  function scaleScores(a,b,c,d,e){
+    const arr=[+a||0,+b||0,+c||0,+d||0,+e||0];
+    const sum=arr.reduce((x,y)=>x+y,0)||1;
+    return arr.map(x=>Math.round(x/sum*100));
+  }
+
+  function drawChart(res){
+    const ctx = $('#rev-chart').getContext('2d');
+    const map={none:0,low:1,medium:2,high:3};
+    const data=['A','B','C'].map(k=>map[res[k]||'none']);
+    if (State.chart) State.chart.destroy();
+    State.chart = new Chart(ctx,{ type:'bar', data:{ labels:['A','B','C'], datasets:[{ label:'反应速率(相对)', data }] },
+      options:{ responsive:true, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } } });
+  }
+
+  // ====== DOM refs ======
+  const dom = {
+    modeSel: $('#mode-select'), modePill: $('#mode-pill'),
+    tabs: $$('.tab'), panes: { manual:$('#manual'), log:$('#log') },
+    expTitle: $('#exp-title'), expProgress: $('#exp-progress'), manualInject: $('#manual-inject'), steps: $('#steps'),
+    reagents: $('#reagents'), tools: $('#tools'),
+    tubes: $$('.test-tube'),
+    logEntries: $('#log-entries'),
+    score: $('#score'), time: $('#time'), errs: $('#errs'),
+    btnUndo: $('#btn-undo'), btnHint: $('#btn-hint'), btnSelect: $('#btn-select'), btnQuick: $('#btn-quick'),
+    overlaySelect: $('#overlay-select'), selectButtons: $('#select-buttons'), closeSelect: $('#close-select'),
+    overlayReview: $('#overlay-review'), revScore: $('#rev-score'), revSub: $('#rev-subscore'), revBody: $('#rev-body'), closeReview: $('#close-review'),
+    btnSave: $('#btn-save'), btnRestore: $('#btn-restore'), btnClear: $('#btn-clearstore'), btnExport: $('#btn-export'),
+    btnCustom: $('#btn-custom'), overlayCustom: $('#overlay-custom'),
+    cTitle: $('#c-title'), cTemplate: $('#c-template'), cManual: $('#c-manual'),
+    sc1: $('#sc-1'), sc2: $('#sc-2'), sc3: $('#sc-3'), sc4: $('#sc-4'), sc5: $('#sc-5'),
+    cReagents: $('#c-reagents'), addReagent: $('#add-reagent'), cEnzyme: $('#c-enzyme'), cSubstrate: $('#c-substrate'), cEnableTemp: $('#c-enable-temp'),
+    condName: $$('.c-cond-name'), condReagent: $$('.c-cond-reagent'), condBath: $$('.c-cond-bath'), condIntensity: $$('.c-cond-intensity'),
+    btnApplyTpl: $('#btn-apply-template'), btnSaveCustom: $('#btn-save-custom'), btnBuildStart: $('#btn-build-start'), btnCloseCustom: $('#btn-close-custom'),
+    btnExportCustom: $('#btn-export-custom'), btnImportCustom: $('#btn-import-custom'), fileImport: $('#file-import')
+  };
+
+  // ====== 初始化基础实验（和你原有的三个相同效果） ======
+  function makeBaseFromTemplate(key){
+    const t=Templates[key];
+    const id=key;
+    const manual = t.manual;
+    // tools
+    const tools=[ {id:'dropper',name:'滴管',icon:'<i class="fas fa-eye-dropper"></i>'}, {id:'start_button',name:'开始反应',icon:'<i class="fas fa-play-circle"></i>',hidden:true} ];
+    if (t.enableTemp) tools.splice(1,0,{id:'bath_0',name:'0℃ 冰浴',icon:'<i class="fas fa-snowflake"></i>'},{id:'bath_37',name:'37℃ 恒温',icon:'<i class="fas fa-thermometer-half"></i>'},{id:'bath_100',name:'100℃ 沸水',icon:'<i class="fas fa-fire"></i>'});
+    // procedure (standard 5 steps)
+    const [s1,s2,s3,s4,s5] = scaleScores(20,20,20,10,30);
+    const proc=[
+      {id:1,text:'向三支试管中各加入酶',score:s1,check:s=>['A','B','C'].every(k=>s.tubes[k].reagents.has(t.enzyme))},
+      {id:2,text:'设置A/B/C条件',score:s2,check:s=>{
+        const okReagent=['A','B','C'].every(k=>!t.tube[k].reagent || s.tubes[k].reagents.has(t.tube[k].reagent));
+        const okBath= !t.enableTemp || ['A','B','C'].every(k=> !!s.tubes[k].condition );
+        return okReagent && okBath;
+      }},
+      {id:3,text:'向三支试管中各加入底物/关键试剂',score:s3,check:s=>{
+        if (t.substrate) return ['A','B','C'].every(k=>s.tubes[k].reagents.has(t.substrate));
+        // 底物为空时，认为第二步已完成关键条件
+        return ['A','B','C'].every(k=>s.tubes[k].reagents.size>=2);
+      }},
+      {id:4,text:'点击“开始反应”按钮，观察现象',score:s4,check:s=>s.started},
+      {id:5,text:'获得科学的实验结果',score:s5,check:s=>s.finished && s.errs===0}
+    ];
+    // getFinalResults
+    const getFinal = (s)=>{
+      const out={}; ['A','B','C'].forEach(k=>{ 
+        const hasE = t.enzyme ? s.tubes[k].reagents.has(t.enzyme) : true;
+        const hasS = t.substrate ? s.tubes[k].reagents.has(t.substrate) : true;
+        const condOk = t.tube[k].reagent ? s.tubes[k].reagents.has(t.tube[k].reagent) : true;
+        const bathOk = !t.enableTemp || !!s.tubes[k].condition;
+        out[k] = (hasE && hasS && condOk && bathOk) ? t.tube[k].intensity : 'none';
+      });
+      return out;
+    };
+    // validateDrop
+    const validateDrop=(reagent,tubeId,tubeState)=>{
+      if (State.mode!=='exam') return {valid:true};
+      if (reagent!==t.enzyme && t.enzyme && !tubeState.reagents.has(t.enzyme)) return {valid:false, reason:`应先向试管${tubeId}加入酶（${t.enzyme}）。`};
+      if (t.substrate && reagent===t.substrate){
+        // 检查条件是否已设置（若有）
+        const need = t.tube[tubeId].reagent;
+        if (need && !tubeState.reagents.has(need)) return {valid:false, reason:`应先完成试管${tubeId}的条件设置（${need}），再加入底物。`};
+      }
+      // 条件错管
+      const expect = t.tube[tubeId].reagent;
+      if (expect && reagent!==t.enzyme && reagent!==t.substrate && reagent!==expect) return {valid:false, reason:`条件错位：${reagent} 不应加入试管${tubeId}，该管条件为 ${expect}。`};
+      return {valid:true};
+    };
+    // manual sections
+    const exp = {
+      id, title:t.title, manual, reagents:t.reagents, tools,
+      procedure:proc, getReadyState:(s)=>true, getFinalResults:getFinal, validateDrop
+    };
+    BaseExperiments[id]=exp;
+  }
+
+  ['ph','temperature','concentration'].forEach(makeBaseFromTemplate);
+
+  // ====== 自定义持久化 ======
+  function getCustomList(){
+    try{ return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch(e){ return []; }
+  }
+  function setCustomList(arr){ localStorage.setItem(CUSTOM_KEY, JSON.stringify(arr)); }
+  function addCustomConfig(conf){ const list=getCustomList(); list.push(conf); setCustomList(list); }
+
+  // ====== UI：选择实验 ======
+  function renderSelect(){
+    const cont = dom.selectButtons; cont.innerHTML='';
+    const makeBtn=(id,title,icon='fa-flask')=>{
+      const b=document.createElement('button'); b.className='btn'; b.innerHTML=`<i class="fas ${icon}"></i> ${title}`; b.dataset.exp=id; return b;
+    };
+    cont.appendChild(makeBtn('ph','pH 模板'));
+    cont.appendChild(makeBtn('temperature','温度模板','fa-thermometer-half'));
+    cont.appendChild(makeBtn('concentration','底物浓度模板','fa-percentage'));
+    // custom
+    const customs=getCustomList();
+    if (customs.length){
+      const sep=document.createElement('div'); sep.innerHTML='<span class="tag">我的自定义实验</span>'; cont.appendChild(sep);
+      customs.forEach(c=>{
+        cont.appendChild(makeBtn(c.id, c.title, 'fa-wand-magic-sparkles'));
+        // 动态注册为 BaseExperiments
+        BaseExperiments[c.id]=compileCustomToExperiment(c);
+      });
+    }
+  }
+
+  // ====== 自定义表单渲染 ======
+  function renderReagentEditor(items){
+    const cont = dom.cReagents;
+    cont.innerHTML = '';
+    items.forEach((r,idx)=>{
+      const row=document.createElement('div'); row.className='row';
+      row.innerHTML = `
+        <span class="tag">#${idx+1}</span>
+        <input class="rg-id" style="width:140px" placeholder="id" value="${r.id||''}"/>
+        <input class="rg-name" style="width:220px" placeholder="名称" value="${r.name||''}"/>
+        <input class="rg-icon" style="width:220px" placeholder="图标/文本(可填 H₂O₂ 或 <i>…</i>)" value="${r.icon||''}"/>
+        <button class="btn danger rg-del" title="删除">删除</button>
+      `;
+      cont.appendChild(row);
+    });
+    // 更新下拉
+    function repopulateSelects(){
+      const options = items.map(r=>`<option value="${r.id}">${r.name} (${r.id})</option>`).join('');
+      dom.cEnzyme.innerHTML = `<option value="">（无）</option>${options}`;
+      dom.cSubstrate.innerHTML = `<option value="">（无）</option>${options}`;
+      dom.condReagent.forEach(sel=> sel.innerHTML = `<option value="">（无）</option>${options}`);
+    }
+    repopulateSelects();
+    // 事件
+    cont.onclick = (e)=>{
+      const row = e.target.closest('.row'); const idx = Array.from(cont.children).indexOf(row);
+      if (e.target.classList.contains('rg-del')){
+        items.splice(idx,1); renderReagentEditor(items); return;
+      }
+    };
+    cont.oninput = (e)=>{
+      const row = e.target.closest('.row'); if (!row) return;
+      const idx = Array.from(cont.children).indexOf(row);
+      items[idx].id = row.querySelector('.rg-id').value.trim();
+      items[idx].name = row.querySelector('.rg-name').value.trim();
+      items[idx].icon = row.querySelector('.rg-icon').value.trim();
+      // 同步下拉
+      const options = items.map(r=>`<option value="${r.id}">${r.name} (${r.id})</option>`).join('');
+      dom.cEnzyme.innerHTML = `<option value="">（无）</option>${options}`;
+      dom.cSubstrate.innerHTML = `<option value="">（无）</option>${options}`;
+      dom.condReagent.forEach(sel=> sel.innerHTML = `<option value="">（无）</option>${options}`);
+    };
+  }
+
+  function loadTemplateToForm(key){
+    const t = Templates[key];
+    dom.cTitle.value = t.title;
+    dom.cManual.value = t.manual;
+    renderReagentEditor(JSON.parse(JSON.stringify(t.reagents)));
+    dom.cEnzyme.value = t.enzyme || '';
+    dom.cSubstrate.value = t.substrate || '';
+    dom.cEnableTemp.value = t.enableTemp ? 'yes' : 'no';
+    ['A','B','C'].forEach(k=>{
+      dom.condName.find(x=>x.dataset.t===k).value = t.tube[k].name;
+      dom.condReagent.find(x=>x.dataset.t===k).value = t.tube[k].reagent || '';
+      dom.condBath.find(x=>x.dataset.t===k).value = t.tube[k].bath || '';
+      dom.condIntensity.find(x=>x.dataset.t===k).value = t.tube[k].intensity;
+    });
+  }
+
+  // 收集表单到配置对象
+  function collectForm(){
+    const title = dom.cTitle.value.trim() || '未命名实验';
+    const reagents = Array.from(dom.cReagents.children).map(row=>{
+      return {
+        id: row.querySelector('.rg-id').value.trim(),
+        name: row.querySelector('.rg-name').value.trim(),
+        icon: row.querySelector('.rg-icon').value.trim()
+      };
+    }).filter(r=>r.id && r.name);
+    const enzyme = dom.cEnzyme.value || null;
+    const substrate = dom.cSubstrate.value || null;
+    const enableTemp = dom.cEnableTemp.value==='yes';
+    const tube={}; ['A','B','C'].forEach(k=>{
+      tube[k]={
+        name: dom.condName.find(x=>x.dataset.t===k).value.trim() || k,
+        reagent: dom.condReagent.find(x=>x.dataset.t===k).value || '',
+        bath: enableTemp ? (dom.condBath.find(x=>x.dataset.t===k).value || '') : '',
+        intensity: dom.condIntensity.find(x=>x.dataset.t===k).value
+      };
+    });
+    const scores = scaleScores(dom.sc1.value,dom.sc2.value,dom.sc3.value,dom.sc4.value,dom.sc5.value);
+    const manual = dom.cManual.value.trim() || `<details open><summary><b>实验目的</b></summary><ul><li>描述你的实验目的。</li></ul></details>`;
+    const id = 'custom_'+Date.now();
+    return { id, title, reagents, enzyme, substrate, enableTemp, tube, scores, manual };
+  }
+
+  // 编译自定义配置为可运行实验定义
+  function compileCustomToExperiment(conf){
+    const tools=[ {id:'dropper',name:'滴管',icon:'<i class="fas fa-eye-dropper"></i>'}, {id:'start_button',name:'开始反应',icon:'<i class="fas fa-play-circle"></i>',hidden:true} ];
+    if (conf.enableTemp) tools.splice(1,0,{id:'bath_0',name:'0℃ 冰浴',icon:'<i class="fas fa-snowflake"></i>'},{id:'bath_37',name:'37℃ 恒温',icon:'<i class="fas fa-thermometer-half"></i>'},{id:'bath_100',name:'100℃ 沸水',icon:'<i class="fas fa-fire"></i>'});
+    const [s1,s2,s3,s4,s5]=conf.scores||[20,20,20,10,30];
+
+    const proc=[
+      {id:1,text:'向三支试管中各加入酶',score:s1,check:s=> conf.enzyme ? ['A','B','C'].every(k=>s.tubes[k].reagents.has(conf.enzyme)) : true },
+      {id:2,text:'设置A/B/C条件',score:s2,check:s=>{
+        const okReagent=['A','B','C'].every(k=>!conf.tube[k].reagent || s.tubes[k].reagents.has(conf.tube[k].reagent));
+        const okBath= !conf.enableTemp || ['A','B','C'].every(k=> !!s.tubes[k].condition );
+        return okReagent && okBath;
+      }},
+      {id:3,text:'向三支试管中各加入底物/关键试剂',score:s3,check:s=> conf.substrate ? ['A','B','C'].every(k=>s.tubes[k].reagents.has(conf.substrate)) : true },
+      {id:4,text:'点击“开始反应”按钮，观察现象',score:s4,check:s=>s.started},
+      {id:5,text:'获得科学的实验结果',score:s5,check:s=>s.finished && s.errs===0}
+    ];
+
+    const getFinal = (s)=>{
+      const out={}; ['A','B','C'].forEach(k=>{
+        const okE = conf.enzyme ? s.tubes[k].reagents.has(conf.enzyme) : true;
+        const okS = conf.substrate ? s.tubes[k].reagents.has(conf.substrate) : true;
+        const okR = conf.tube[k].reagent ? s.tubes[k].reagents.has(conf.tube[k].reagent) : true;
+        const okB = !conf.enableTemp || !!s.tubes[k].condition;
+        out[k] = (okE && okS && okR && okB) ? (conf.tube[k].intensity || 'none') : 'none';
+      });
+      return out;
+    };
+
+    const validateDrop = (reagent,tubeId,tubeState)=>{
+      if (State.mode!=='exam') return {valid:true};
+      if (conf.enzyme && reagent!==conf.enzyme && !tubeState.reagents.has(conf.enzyme)) return {valid:false, reason:`应先向试管${tubeId}加入酶（${conf.enzyme}）。`};
+      if (conf.substrate && reagent===conf.substrate){
+        const need = conf.tube[tubeId].reagent;
+        if (need && !tubeState.reagents.has(need)) return {valid:false, reason:`应先完成试管${tubeId}的条件设置（${need}），再加入底物。`};
+      }
+      const expect = conf.tube[tubeId].reagent;
+      if (expect && reagent!==conf.enzyme && reagent!==conf.substrate && reagent!==expect) return {valid:false, reason:`条件错位：${reagent} 不应加入试管${tubeId}，该管条件为 ${expect}。`};
+      return {valid:true};
+    };
+
+    const reviewHTML = (results)=>{
+      const tr = ['A','B','C'].map(k=>`<tr><td>${k}</td><td>${conf.tube[k].name||''}</td><td>${conf.tube[k].reagent||'-'}</td><td>${conf.tube[k].bath||'-'}</td><td>${conf.tube[k].intensity}</td><td>${results[k]}</td></tr>`).join('');
+      return `<div><h4>结果表</h4>
+        <table class="simple"><thead><tr><th>试管</th><th>条件名称</th><th>条件试剂</th><th>温度</th><th>预期强度</th><th>你的结果</th></tr></thead><tbody>${tr}</tbody></table>
+        <p class="hint">若“你的结果”与“预期强度”不符，请对照操作日志排查：试剂是否加入到正确试管？是否先酶后底物？是否设置了温度？</p></div>`;
+    };
+
+    return {
+      id:conf.id, title:conf.title, manual:conf.manual, reagents:conf.reagents, tools,
+      procedure:proc, getReadyState:(s)=>true, getFinalResults:getFinal, validateDrop, reviewHTML
+    };
+  }
+
+  // ====== 实验运行态 ======
+  function initLab(exp){
+    State.current = exp;
+    State.procedure = JSON.parse(JSON.stringify(exp.procedure));
+    State.lab = {
+      expId: exp.id, activeTool:null, dropper:null, tubes:{ A:{reagents:new Set(),condition:null}, B:{reagents:new Set(),condition:null}, C:{reagents:new Set(),condition:null} },
+      score:0, errs:0, log:[], started:false, finished:false, startAt:null, elapsed:0, timer:null
+    };
+  }
+
+  function renderAll(){
+    // 手册
+    dom.expTitle.textContent = State.current.title;
+    dom.manualInject.innerHTML = State.current.manual;
+    renderSteps();
+    dom.expProgress.textContent = '0%';
+    // 架子
+    dom.reagents.innerHTML = State.current.reagents.map((r,i)=>`
+      <div class="bottle" data-id="${r.id}" title="吸取${r.name}">
+        <div class="iconbox">${r.icon||r.name}</div>
+        <div class="muted">[${i+1}] ${r.name}</div>
+      </div>`).join('');
+    dom.tools.innerHTML = State.current.tools.map(t=>`
+      <div class="tool ${t.hidden?'hidden':''}" data-id="${t.id}" title="${t.name}">
+        <div class="iconbox">${t.icon}</div>
+        <div class="muted">${t.name}</div>
+      </div>`).join('');
+    // 状态
+    $('#feedback').innerHTML=''; dom.logEntries.innerHTML='';
+    dom.score.textContent='0'; dom.time.textContent='00:00'; dom.errs.textContent='0';
+    // tubes
+    ['A','B','C'].forEach(k=>{
+      const tube=$('#tube-'+k); tube.querySelector('.liquid').style.height='0%';
+      tube.querySelector('.bubbles').innerHTML=''; tube.querySelector('.indicator').innerHTML='';
+    });
+    bindRuntimeEvents();
+    checkSteps();
+  }
+
+  function renderSteps(){
+    dom.steps.innerHTML = State.procedure.map(s=>`<div class="row" data-step="${s.id}" style="justify-content:space-between;border:1px solid var(--border);padding:.5rem;border-radius:8px;margin:.35rem 0;">
+      <span><i class="fas ${s.completed?'fa-check-circle':'fa-flask'}"></i> ${s.text}</span>
+      <span class="pill">+${s.score}分</span></div>`).join('');
+    const first = State.procedure.find(s=>!s.completed); if (first){ const el = dom.steps.querySelector(`[data-step="${first.id}"]`); if (el) el.style.background='#f7fbff'; }
+  }
+
+  function bindRuntimeEvents(){
+    // 代理绑定，避免重复
+    dom.reagents.onclick = (e)=>{
+      const b=e.target.closest('.bottle'); if (!b) return;
+      if (!(State.lab.activeTool && State.lab.activeTool.startsWith('dropper'))) { msg('请先在工具区选择“滴管”。','warn'); return; }
+      State.lab.dropper = { id:b.dataset.id, name:b.innerText.trim() };
+      msg(`已吸取：${State.lab.dropper.name}`,'info');
+    };
+    dom.tools.onclick = (e)=>{
+      const t=e.target.closest('.tool'); if (!t) return;
+      const id=t.dataset.id;
+      if (id==='start_button'){ startReaction(); return; }
+      State.lab.activeTool = id;
+      msg(`已选择工具：${id}`,'info');
+    };
+    dom.tubes.forEach(tube=>{
+      tube.onclick = ()=>{
+        const id=tube.dataset.id;
+        if (!State.lab.activeTool) return;
+        if (State.lab.activeTool.startsWith('dropper')){
+          if (!State.lab.dropper){ msg('滴管为空，先在试剂架吸取。','warn'); return; }
+          handleAddReagent(State.lab.dropper.id, id);
+        } else if (State.lab.activeTool.startsWith('bath')){
+          if (State.lab.finished) return;
+          pushHistory();
+          if (State.lab.tubes[id].condition){ msg(`试管${id}已处理过温度。`,'warn'); return; }
+          State.lab.tubes[id].condition = State.lab.activeTool;
+          tube.querySelector('.indicator').innerHTML = ({bath_0:'<i class="fas fa-snowflake"></i>',bath_37:'<i class="fas fa-thermometer-half"></i>',bath_100:'<i class="fas fa-fire"></i>'})[State.lab.activeTool] || '';
+          setLiquidHeight(id);
+          addLog('info',`对试管 ${id} 进行了 ${State.lab.activeTool.replace('bath_','')}℃ 温度处理。`);
+          checkSteps();
+        }
+      };
+    });
+  }
+
+  function setLiquidHeight(id){
+    const tube=State.lab.tubes[id], el=$('#tube-'+id).querySelector('.liquid');
+    el.style.height = `${(tube.reagents.size*15) + (tube.condition?10:0)}%`;
+    if (tube.reagents.size>0) el.style.background = '#d1e0e0';
+    if (tube.reagents.has('catalase')) el.style.background = '#f5e6cc';
+  }
+
+  function addLog(type,text,reason=''){
+    State.lab.log.unshift({type,text,reason});
+    dom.logEntries.innerHTML = State.lab.log.map(e=>`<div class="msg ${e.type}"><div>${e.text}</div>${e.reason?`<div class="muted">${e.reason}</div>`:''}</div>`).join('');
+  }
+
+  function error(reason, tip){
+    State.lab.errs++; dom.errs.textContent = State.lab.errs;
+    addLog('error', reason, tip?('AI提示：'+tip):'');
+    msg(tip||reason,'error');
+  }
+
+  function handleAddReagent(reagentId, tubeId){
+    if (State.lab.finished || State.lab.started) return;
+    const tube = State.lab.tubes[tubeId];
+    if (tube.reagents.has(reagentId)){ msg(`重复加入：试管${tubeId}已有该试剂。`,'warn'); return; }
+    // 验证
+    const v = State.current.validateDrop ? State.current.validateDrop(reagentId, tubeId, tube) : {valid:true};
+    pushHistory();
+    if (!v.valid) error(`在试管${tubeId}中错误加入 ${reagentId}`, v.reason);
+    tube.reagents.add(reagentId);
+    setLiquidHeight(tubeId);
+    addLog('info',`向试管 ${tubeId} 加入了 ${reagentId}。`);
+    checkSteps();
+  }
+
+  function checkSteps(){
+    let done=0;
+    State.procedure.forEach(s=>{
+      if (!s.completed && s.check && s.check(State.lab)){
+        s.completed=true; State.lab.score+=s.score; dom.score.textContent=State.lab.score;
+        addLog('success', `完成步骤：“${s.text}”`, `+${s.score}分`);
+      }
+      if (s.completed) done++;
+    });
+    renderSteps();
+    dom.expProgress.textContent = Math.round(done/State.procedure.length*100)+'%';
+    // 准备好时显示开始按钮
+    const readyBtn = $(`#tools .tool[data-id="start_button"]`);
+    if (readyBtn && !State.lab.started && done>=State.procedure.length-2){ readyBtn.classList.remove('hidden'); }
+  }
+
+  function startTimer(){
+    if (State.lab.timer) clearInterval(State.lab.timer);
+    State.lab.startAt = Date.now();
+    State.lab.timer = setInterval(()=>{
+      if (State.lab.finished) return;
+      State.lab.elapsed = Math.round((Date.now()-State.lab.startAt)/1000);
+      dom.time.textContent = minutes(State.lab.elapsed);
+    },1000);
+  }
+
+  function startReaction(){
+    if (State.lab.finished) return;
+    pushHistory();
+    State.lab.started=true;
+    checkSteps();
+    State.lab.finished=true;
+    clearInterval(State.lab.timer);
+    const res = State.current.getFinalResults(State.lab);
+    ['A','B','C'].forEach(k=>showBubbles(k, res[k]));
+    setTimeout(()=>showReview(res),900);
+  }
+
+  function showBubbles(id,intensity){
+    const wrap = $('#tube-'+id+' .bubbles'); wrap.innerHTML='';
+    const map={none:0,low:8,medium:16,high:25}; const dur={none:0,low:4,medium:3,high:2};
+    for(let i=0;i<map[intensity||'none'];i++){
+      const b=document.createElement('span'); b.className='bubble';
+      const size=Math.random()*8+4; b.style.width=size+'px'; b.style.height=size+'px';
+      b.style.left=Math.random()*85+'%'; b.style.animationDuration=(Math.random()*1.5+dur[intensity])+'s';
+      b.style.animationDelay=(Math.random()*2)+'s'; wrap.appendChild(b);
+    }
+  }
+
+  function showReview(res){
+    dom.revScore.textContent = State.lab.score;
+    let penalty=0;
+    if (State.mode==='exam'){ penalty=Math.min(State.hintCount*3,30); }
+    const final=Math.max(0, State.lab.score-penalty);
+    dom.revScore.textContent=final;
+    dom.revSub.textContent = State.mode==='exam' ? `提示次数：${State.hintCount}（扣分 ${penalty}）` : `提示次数：${State.hintCount}（教学模式不扣分）`;
+    const reviewHTML = State.current.reviewHTML ? State.current.reviewHTML(res) : defaultReviewHTML(res);
+    dom.revBody.innerHTML = reviewHTML;
+    drawChart(res);
+    dom.overlayReview.classList.add('show');
+  }
+  function defaultReviewHTML(res){
+    const tr=['A','B','C'].map(k=>`<tr><td>${k}</td><td>${res[k]||'none'}</td></tr>`).join('');
+    return `<table class="simple"><thead><tr><th>试管</th><th>你的结果强度</th></tr></thead><tbody>${tr}</tbody></table>`;
+  }
+
+  // ====== 存档/导出 ======
+  function saveState(){
+    const pack = { when:new Date().toISOString(), mode:State.mode, hint:State.hintCount, expId:State.current.id, snap:snapshot() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pack)); msg('进度已保存。','success');
+  }
+  function restoreState(){
+    const raw=localStorage.getItem(STORAGE_KEY); if(!raw){ msg('无可恢复存档。','warn'); return; }
+    try{
+      const p=JSON.parse(raw);
+      if (!BaseExperiments[p.expId]){ msg('存档中的实验配置不存在（可能已删除）。','error'); return; }
+      restoreSnap(p.snap); State.mode=p.mode||'teach'; dom.modeSel.value=State.mode; updateModePill(); msg('已恢复。','success');
+    }catch(e){ msg('恢复失败：存档损坏或版本不兼容。','error'); }
+  }
+  function clearState(){ localStorage.removeItem(STORAGE_KEY); msg('本地存档已清除。','success'); }
+
+  function exportCSV(){
+    if (!State.lab){ msg('请先开始一个实验。','warn'); return; }
+    const header=['时间戳','实验ID','模式','得分','用时(秒)','失误次数','提示次数','步骤完成度(%)','事件类型','事件内容','提示'];
+    const lines=[header.join(',')];
+    const done=State.procedure.filter(s=>s.completed).length, prog=Math.round(done/State.procedure.length*100);
+    lines.push([new Date().toISOString(), State.lab.expId, State.mode, State.lab.score, State.lab.elapsed, State.lab.errs, State.hintCount, prog, 'SUMMARY','-','-'].join(','));
+    State.lab.log.forEach(e=>{
+      lines.push([ new Date().toISOString(), State.lab.expId, State.mode, State.lab.score, State.lab.elapsed, State.lab.errs, State.hintCount, prog,
+        e.type, `"${(e.text||'').replace(/"/g,'""')}"`, `"${(e.reason||'').replace(/"/g,'""')}"` ].join(','));
+    });
+    const blob = new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`AI实验_${State.lab.expId}_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
+    msg('CSV 已导出。','success');
+  }
+
+  // ====== 事件绑定 ======
+  dom.tabs.forEach(t=>t.onclick=()=>{
+    dom.tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active');
+    Object.values(dom.panes).forEach(p=>p.classList.remove('active')); dom.panes[t.dataset.pane].classList.add('active');
+  });
+  dom.modeSel.onchange = ()=>{ State.mode=dom.modeSel.value; updateModePill(); msg(`已切换模式：${State.mode==='teach'?'教学（不扣分）':'考核（提示扣分）'}`,'info'); };
+  function updateModePill(){ dom.modePill.textContent = State.mode==='teach' ? '教学模式' : '考核模式'; }
+  dom.btnSelect.onclick = ()=>{ renderSelect(); dom.overlaySelect.classList.add('show'); };
+  dom.closeSelect.onclick = ()=> dom.overlaySelect.classList.remove('show');
+  dom.selectButtons.onclick = (e)=>{
+    const btn = e.target.closest('button'); if (!btn) return;
+    const id = btn.dataset.exp; if (!BaseExperiments[id]) return;
+    dom.overlaySelect.classList.remove('show');
+    initLab(BaseExperiments[id]); renderAll(); startTimer(); State.hintCount=0; msg('实验已开始。','info');
+    addLog('info',`新实验开始：${BaseExperiments[id].title}`);
+  };
+  dom.btnQuick.onclick = ()=>{
+    const startBtn = $('#tools .tool[data-id="start_button"]');
+    if (!startBtn || startBtn.classList.contains('hidden')){ msg('还不能开始：请先完成必要步骤。','warn'); return; }
+    startReaction();
+  };
+  dom.btnHint.onclick = ()=>{
+    const step = State.procedure.find(s=>!s.completed);
+    if (!step){ msg('步骤已完成，点击“开始反应”。','success'); State.hintCount++; return; }
+    msg(`<b>提示：</b>${step.text}`,'info'); State.hintCount++;
+  };
+  dom.btnUndo.onclick = ()=>{
+    if (!State.history.length){ msg('没有可撤销的操作。','warn'); return; }
+    const s = State.history.pop(); restoreSnap(s); msg('已撤销上一步。','success');
+  };
+  dom.btnSave.onclick = saveState; dom.btnRestore.onclick = restoreState; dom.btnClear.onclick = clearState; dom.btnExport.onclick = exportCSV;
+  dom.closeReview.onclick = ()=> dom.overlayReview.classList.remove('show');
+
+  dom.btnCustom.onclick = ()=>{
+    dom.overlayCustom.classList.add('show');
+    // 若当前为空白，则预置 pH 模板，避免全空
+    if (!dom.cReagents.children.length) { loadTemplateToForm('ph'); }
+  };
+  dom.btnCloseCustom.onclick = ()=> dom.overlayCustom.classList.remove('show');
+  dom.cTemplate.onchange = ()=>{
+    const key=dom.cTemplate.value; if (key==='blank'){
+      renderReagentEditor([]);
+      dom.cTitle.value='';
+      dom.cManual.value='';
+      dom.cEnzyme.innerHTML='<option value="">（无）</option>'; dom.cSubstrate.innerHTML='<option value="">（无）</option>';
+      dom.cEnableTemp.value='no';
+      ['A','B','C'].forEach(k=>{
+        dom.condName.find(x=>x.dataset.t===k).value='';
+        dom.condReagent.find(x=>x.dataset.t===k).innerHTML='<option value="">（无）</option>';
+        dom.condBath.find(x=>x.dataset.t===k).value='';
+        dom.condIntensity.find(x=>x.dataset.t===k).value='none';
+      });
+    }else{
+      loadTemplateToForm(key);
+    }
+  };
+  dom.addReagent.onclick = ()=>{
+    const items = Array.from(dom.cReagents.children).map(row=>({
+      id: row.querySelector('.rg-id').value.trim(),
+      name: row.querySelector('.rg-name').value.trim(),
+      icon: row.querySelector('.rg-icon').value.trim()
+    }));
+    items.push({id:'',name:'',icon:''}); renderReagentEditor(items);
+  };
+  dom.btnApplyTpl.onclick = ()=>{
+    const key = dom.cTemplate.value==='blank' ? 'ph' : dom.cTemplate.value;
+    loadTemplateToForm(key); msg('已套用模板到表单。','success');
+  };
+  dom.btnBuildStart.onclick = ()=>{
+    const conf = collectForm();
+    if (!conf.reagents.length){ msg('请至少添加一个试剂。','error'); return; }
+    // 编译并立即运行
+    conf.id = 'custom_runtime';
+    const exp = compileCustomToExperiment(conf);
+    BaseExperiments[conf.id] = exp;
+    dom.overlayCustom.classList.remove('show');
+    initLab(exp); renderAll(); startTimer(); State.hintCount=0; msg('自定义实验已开始。','success');
+  };
+  dom.btnSaveCustom.onclick = ()=>{
+    const conf = collectForm(); addCustomConfig(conf); msg('已保存为“我的实验”。可在“选择/重置实验”里找到。','success');
+  };
+  dom.btnExportCustom.onclick = ()=>{
+    const data = JSON.stringify(getCustomList(), null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download='自定义实验配置.json'; a.click(); URL.revokeObjectURL(url);
+    msg('已导出自定义配置。','success');
+  };
+  dom.btnImportCustom.onclick = ()=> dom.fileImport.click();
+  dom.fileImport.onchange = (e)=>{
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try {
+        const arr = JSON.parse(reader.result);
+        if (!Array.isArray(arr)) throw new Error('格式不正确：应为数组。');
+        setCustomList(arr); msg('已导入自定义配置。','success');
+      } catch(err){ msg('导入失败：'+err.message,'error'); }
+      e.target.value='';
+    };
+    reader.readAsText(file);
+  };
+
+  // 键盘快捷键
+  document.addEventListener('keydown', (e)=>{
+    if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    const k=e.key.toLowerCase();
+    if (k==='h'){ dom.btnHint.click(); e.preventDefault(); }
+    else if (k==='r'){ dom.btnSelect.click(); e.preventDefault(); }
+    else if (k==='s'){ const btn = $('#tools .tool[data-id="start_button"]'); if (btn && !btn.classList.contains('hidden')) startReaction(); e.preventDefault(); }
+    else if (k==='u'){ dom.btnUndo.click(); e.preventDefault(); }
+    else if (k==='e'){ exportCSV(); e.preventDefault(); }
+    else if (k==='d'){ const drop=$('#tools .tool[data-id="dropper"]'); if (drop){ State.lab.activeTool='dropper'; msg('已选择工具：滴管','info'); } e.preventDefault(); }
+    else if (/^[1-9]$/.test(k)){
+      if (State.lab?.activeTool?.startsWith('dropper')){
+        const idx=+k-1; const bottle = dom.reagents.querySelectorAll('.bottle')[idx];
+        if (bottle){ State.lab.dropper={id:bottle.dataset.id, name:bottle.innerText.trim()}; msg(`已通过按键[${k}]选择试剂：${State.lab.dropper.name}`,'info'); }
+        e.preventDefault();
+      }
+    }
+  });
+
+  // 初始
+  updateModePill();
+  renderSelect();
+  // 自动弹出选择面板，方便起步
+  dom.overlaySelect.classList.add('show');
+})();
+</script>
+</body>
+</html>
